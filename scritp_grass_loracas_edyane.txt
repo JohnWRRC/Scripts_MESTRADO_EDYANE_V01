@@ -1,0 +1,145 @@
+
+
+
+cd "H:\data\Edyane"
+g.region -p rast=STs_buffer_20m_img
+r.mapcalc "join_resistencia_raster_v02_img_semnull=if(isnull(join_resistencia_raster_v02_img),1,join_resistencia_raster_v02_img)"
+
+
+patch_id_list=`r.stats -n input=STs_buffer_20m_img`
+g.region rast=join_resistencia_raster_v02_img_semnull
+patch_id_list=(17 18 12 4) 
+S1=""
+T1=""
+for i in "${patch_id_list[@]}"
+do
+   if [ "$S1" == "" ]
+      then 
+          S1=$i
+          continue
+      else
+          T1=$i
+      fi
+   echo "$S1 $T1"
+ 
+padtowidth=5
+S1format=`printf "%0*d" $padtowidth $S1`
+T1format=`printf "%0*d" $padtowidth $T1`
+echo "$S1format $T1format"
+
+
+
+
+  ##................
+
+   cd "H:\data\Edyane"
+   PAISAGEM="LANDSCAPE01"
+   ARQSAIDA=$PAISAGEM$"_s"$S1format$"_t"$T1format$".txt"
+
+  ##....
+
+
+
+
+r.mapcalc "source=if(STs_buffer_20m_img!=$S1format,null(),$S1format)"
+r.mapcalc "target=if(STs_buffer_20m_img!=$T1format,null(),$T1format)"
+
+
+r.to.vect in=source out=source_shp feature=area --o -v
+r.to.vect in=target out=target_shp feature=area --o -v
+
+v.db.addcol map=source_shp columns="x double precision, y double precision" --o
+v.db.addcol map=target_shp columns="x double precision, y double precision" --o
+v.to.db map=source_shp opt=coor columns="x,y" --o
+v.to.db map=target_shp opt=coor columns="x,y" --o
+
+
+var_source_x=`v.db.select source_shp -c| awk '{split($0,a,"|"); print a[3]}' `
+var_source_y=`v.db.select source_shp -c| awk '{split($0,a,"|"); print a[4]}' `
+var_target_x=`v.db.select target_shp -c| awk '{split($0,a,"|"); print a[3]}' `
+var_target_y=`v.db.select target_shp -c| awk '{split($0,a,"|"); print a[4]}' `
+
+
+g.region rast=join_resistencia_raster_v02_img_semnull res=15
+g.region -p
+mapa_custo=join_resistencia_raster_v02_img_semnull
+mapa_corredores="corredores_s"$S1format$"_t"$T1format
+mapa_corredores_sem0="corredores_s"$S1format$"_t"$T1format$"_sem0"
+r.mapcalc "$mapa_corredores=0"
+
+for i in {1..2}
+do
+	echo "------------------------------------------------------------------"
+echo "=====> rodando : $i"
+   if [ $i -le 25 ]; then
+        g.region vect=source_shp
+        v.random output=pnts_aleat_S n=1 --o
+        g.region vect=target_shp
+        v.random output=pnts_aleat_T n=1 --o
+        g.region rast=join_resistencia_raster_v02_img_semnull res=15
+   else
+        g.region vect=source_shp
+        v.random output=pnts_aleat_S n=1 --o
+        g.region vect=target_shp
+        v.random output=pnts_aleat_T n=1 --o
+        g.region rast=join_resistencia_raster_v02_img_semnull res=15
+   fi
+ 
+
+
+   r.mapcalc "corredores_aux=$mapa_corredores"
+   r.random.surface output=aleat high=100 --o
+   r.mapcalc "aleat2=1+((aleat/100.0)*2.0)"
+   r.mapcalc "custo_aux=$mapa_custo*aleat2"
+   r.cost -k input=custo_aux output=custo_aux_cost start_points=pnts_aleat_S stop_points=pnts_aleat_T --o
+   r.drain input=custo_aux_cost output=custo_aux_cost_drain vector_points=pnts_aleat_T --o
+
+
+   r.to.vect -b input=custo_aux_cost_drain output=custo_aux_cost_drain_line feature=line --o
+
+   v.build.all 
+   v.db.addcol custo_aux_cost_drain_line column="dist double precision"
+   v.to.db map=custo_aux_cost_drain_line option=length type=line col=dist units=me
+   var_dist_line=`v.univar  custo_aux_cost_drain_line column=dist type=line|grep sum|awk '{gsub("sum: ","");print }'`
+
+   r.series input=corredores_aux,custo_aux_cost_drain output=$mapa_corredores method=sum --o
+   r.mapcalc "$mapa_corredores_sem0=if($mapa_corredores==0,null(),$mapa_corredores)"
+   
+   
+
+
+   r.mapcalc "custo_aux_cost_drain_sum=custo_aux_cost_drain*join_resistencia_raster_v02_img_semnull"
+   var_cost_sum=`r.univar  custo_aux_cost_drain_sum|grep sum|awk '{gsub("sum: ","");print }'`
+   g.region rast=join_resistencia_raster_v02_img_semnull res=15
+
+	
+   r.to.vect -b input=$mapa_corredores_sem0 output=$mapa_corredores_sem0"_line" feature=line --o
+   v.build.all 
+   v.db.addcol $mapa_corredores_sem0"_line" column="dist double precision"
+   v.to.db map=$mapa_corredores_sem0"_line" option=length type=line col=dist units=me
+
+
+   linha=$ARQSAIDA$" simulacao="$i$" lengthvect="$var_dist_line$"  somarast="$var_cost_sum$" source_x="$var_source_x$" source_y="$var_source_y$" target_x="$var_target_x$" target_y="$var_target_y
+
+   ## esse $'\r' abaixo serve pra dar ENTER no final de cada linha
+   echo $linha$'\r' >>$ARQSAIDA
+
+   g.remove -f vect=source_shp,target_shp,pnts_aleat_S,pnts_aleat_T
+   S1=""
+   T1=""
+done
+done
+  
+    
+
+
+  
+
+
+
+
+#Nao usar isso pode dar merda
+temp=`g.mlist type=vect pattern="corredores*" sep="comma"`
+g.remove -f vect=$temp
+temp=`g.mlist type=rast pattern="corredores*" sep="comma"`
+g.remove -f $temp

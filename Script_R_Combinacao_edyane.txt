@@ -1,0 +1,8 @@
+setwd("H:\\data\\Edyane\\grass\\scripts")
+pai1<-read.table("pai1.txt" , head =TRUE)
+pai1
+pai1comb<-(combn(t(pai1),2, FUN = NULL, simplify = TRUE))
+a<-t(pai1comb)
+colnames(a) <- c("pai1_1","pai1_2")
+write.table (a, "pai1comb.txt", row.names = FALSE)
+ncol(pai1comb)

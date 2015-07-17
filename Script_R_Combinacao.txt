@@ -1,0 +1,8 @@
+setwd("C:\\Users\\Juliana\\Documents\\RESULTADOS_DOUTORADO\\Paisagens_Modelos_Smmal_Mammals\\Targets_Final\\Targets_VALUE_Final\\Tabelas_Souce_Targets")
+pai30<-read.table("st_pai30.txt" , head =TRUE)
+pai30
+pai30comb<-(combn(t(pai30),2, FUN = NULL, simplify = TRUE))
+a<-t(pai30comb)
+colnames(a) <- c("pai30_1","pai30_2")
+write.table (a, "pai30comb.txt", row.names = FALSE)
+ncol(pai30comb)

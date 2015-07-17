@@ -1,0 +1,8 @@
+cd "H:\data\Edyane\Edyane"
+
+r.in.gdal in=join_resistencia_raster_v02.img out=join_resistencia_raster_v02_img --o -o 
+r.in.gdal in=Raster_buffer_20m.img out=STs_buffer_20m_img --o -o 
+r.colors map=join_resistencia_raster_v02_img color=random
+r.colors map=STs_buffer_20m_img color=random
+
+
